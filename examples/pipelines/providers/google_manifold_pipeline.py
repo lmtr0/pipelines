@@ -15,7 +15,9 @@ import os
 from pydantic import BaseModel, Field
 
 from google import genai
+import google.auth.api_key as gapi_key
 from google.genai import types
+import vertexai
 from PIL import Image
 from io import BytesIO
 import base64
@@ -28,9 +30,13 @@ class Pipeline:
         """Options to change from the WebUI"""
 
         GOOGLE_API_KEY: str = Field(default="",description="Google Generative AI API key")
-        GOOGLE_USE_VERTEXAI: bool = Field(default=False,description="Use the vertex ai api instead of the gemini developer api")
         USE_PERMISSIVE_SAFETY: bool = Field(default=False,description="Use permissive safety settings")
         GENERATE_IMAGE: bool = Field(default=False,description="Allow image generation")
+
+        GOOGLE_USE_VERTEXAI: bool = Field(default=False,description="Use the vertex ai api instead of the gemini developer api")
+        GOOGLE_VERTEXAI_PROJECT_ID: str = Field(default="",description="if using vertex ai, will set project id")
+        GOOGLE_VERTEXAI_LOCATION: str = Field(default="us-central1",description="if using vertex ai, api location")
+        GOOGLE_VERTEXAI_VERSION: str = Field(default="v1",description="if using vertex ai, will set api version")
 
     def __init__(self):
         self.type = "manifold"
@@ -67,11 +73,31 @@ class Pipeline:
         if self.valves.GOOGLE_API_KEY:
             self.update_pipelines()
 
+    def get_credentials(self) -> gapi_key.Credentials:
+        credentials = gapi_key.Credentials(self.valves.GOOGLE_API_KEY)
+        return credentials
+
+    def get_client(self) -> genai.Client:
+        if self.valves.GOOGLE_USE_VERTEXAI:
+            credentials = self.get_credentials()
+            client = genai.Client(
+                vertexai=True,
+                project=self.valves.GOOGLE_VERTEXAI_PROJECT_ID,
+                location=self.valves.GOOGLE_VERTEXAI_LOCATION,
+                http_options=types.HttpOptions(api_version=self.valves.GOOGLE_VERTEXAI_VERSION),
+                credentials=credentials
+            )
+        else:
+            client = genai.Client(api_key=self.valves.GOOGLE_API_KEY)
+
+
+        return client
+
     def update_pipelines(self) -> None:
         """Update the available models from Google GenAI"""
 
         if self.valves.GOOGLE_API_KEY:
-            client = genai.Client(api_key=self.valves.GOOGLE_API_KEY, vertexai=self.valves.GOOGLE_USE_VERTEXAI)
+            client = self.get_client()
             try:
                 models = client.models.list()
                 self.pipelines = [
@@ -100,7 +126,7 @@ class Pipeline:
             return "Error: GOOGLE_API_KEY is not set"
 
         try:
-            client = genai.Client(api_key=self.valves.GOOGLE_API_KEY, vertexai=self.valves.GOOGLE_USE_VERTEXAI)
+            client = self.get_client()
 
             if model_id.startswith("google_genai."):
                 model_id = model_id[12:]
