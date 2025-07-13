@@ -28,6 +28,7 @@ class Pipeline:
         """Options to change from the WebUI"""
 
         GOOGLE_API_KEY: str = Field(default="",description="Google Generative AI API key")
+        GOOGLE_USE_VERTEXAI: bool = Field(default=False,description="Use the vertex ai api instead of the gemini developer api")
         USE_PERMISSIVE_SAFETY: bool = Field(default=False,description="Use permissive safety settings")
         GENERATE_IMAGE: bool = Field(default=False,description="Allow image generation")
 
@@ -39,6 +40,7 @@ class Pipeline:
         self.valves = self.Valves(**{
             "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY", ""),
             "USE_PERMISSIVE_SAFETY": False,
+            "GOOGLE_USE_VERTEXAI": False,
             "GENERATE_IMAGE": False
         })
         self.pipelines = []
@@ -69,7 +71,7 @@ class Pipeline:
         """Update the available models from Google GenAI"""
 
         if self.valves.GOOGLE_API_KEY:
-            client = genai.Client(api_key=self.valves.GOOGLE_API_KEY)
+            client = genai.Client(api_key=self.valves.GOOGLE_API_KEY, vertexai=self.valves.GOOGLE_USE_VERTEXAI)
             try:
                 models = client.models.list()
                 self.pipelines = [
@@ -98,7 +100,7 @@ class Pipeline:
             return "Error: GOOGLE_API_KEY is not set"
 
         try:
-            client = genai.Client(api_key=self.valves.GOOGLE_API_KEY)
+            client = genai.Client(api_key=self.valves.GOOGLE_API_KEY, vertexai=self.valves.GOOGLE_USE_VERTEXAI)
 
             if model_id.startswith("google_genai."):
                 model_id = model_id[12:]
